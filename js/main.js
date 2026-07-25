@@ -12,12 +12,17 @@ const App = {
   el(id) { return document.getElementById(id); },
 
   async init() {
-    Sfx.enabled = Storage.getSettings().sound;
+    const settings = Storage.getSettings();
+    Sfx.enabled = settings.sound;
+    // Music gets its own switch: kids often want the effects without the tune.
+    Music.enabled = settings.music !== false;
     GK.UI.onScreenChange = (name) => {
       View.running = name === "game";
+      if (name !== "game") Music.stop();
       if (name === "splash") this.refreshSplash();
     };
     GK.UI.bindSoundToggle(Storage);
+    this.bindMusicToggle();
 
     GK.Profiles.init({
       storage: Storage,
@@ -28,7 +33,7 @@ const App = {
     });
 
     Game.autoRunAi = false;            // render.js paces the bugs' turn
-    Game.onEvent = (ev) => View.onEvent(ev);
+    Game.onEvent = (ev) => { this.tally(ev); View.onEvent(ev); };
     Game.onChange = () => this.onChange();
     Game.onDone = (res) => this.matchOver(res);
 
@@ -50,6 +55,17 @@ const App = {
   },
 
   showScreen(name) { GK.UI.showScreen(name); },
+
+  bindMusicToggle() {
+    const paint = () => document.querySelectorAll(".btn-music")
+      .forEach(b => { b.textContent = Music.enabled ? "🎵" : "🎵̸"; b.classList.toggle("off", !Music.enabled); });
+    document.querySelectorAll(".btn-music").forEach(b => b.onclick = () => {
+      Music.enabled = !Music.enabled;
+      const s = Storage.getSettings(); s.music = Music.enabled; Storage.saveSettings(s);
+      paint(); Sfx.click();
+    });
+    paint();
+  },
 
   refreshSplash() {
     const last = GK.Profiles.lastProfile();
@@ -119,19 +135,49 @@ const App = {
     this.showScreen("map");
   },
 
+  // Trophy-shelf counters, gathered from the engine's event stream during a
+  // match and banked in one write when it ends.
+  counts: {},
+  tally(ev) {
+    const c = this.counts;
+    if (ev.type === "ko") {
+      if (ev.u.side === "e") { c.bonked = (c.bonked || 0) + 1; if (ev.cause === "splash") c.dunked = (c.dunked || 0) + 1; }
+      else c.fallen = (c.fallen || 0) + 1;
+    } else if (ev.type === "berry") c.berries = (c.berries || 0) + 1;
+    else if (ev.type === "power") c.powers = (c.powers || 0) + 1;
+  },
+
+  hatFor(critterId) {
+    const id = this.profile && this.progress().hats[critterId];
+    return id ? HATS[id] : null;
+  },
+
   startLevel(idx) {
     const lv = LEVELS[idx];
-    const party = Storage.party(this.progress(), lv.party.length);
-    Game.startLevel(idx, party);
+    const prog0 = this.progress();
+    const party = Storage.party(prog0, lv.party.length);
+    Game.startLevel(idx, party, { perks: prog0.perks || [] });
     this.el("hud-level").textContent = `${idx + 1}. ${lv.name}`;
-    this.lastTurn = null;
+    // Match the starting side so the first onChange doesn't fire a "YOUR TURN"
+    // banner straight over the level's own opening announcement.
+    this.lastTurn = "p";
     this.showScreen("game");
     View.start();
+    Music.start(lv.boss ? "boss" : "garden");
     if (lv.boss) {
       Sfx.bossRoar();
       View.say(BUGS[lv.boss].name.toUpperCase() + "!", BUGS[lv.boss].intro);
+      View.punchZoom(Game.units("e").find(u => u.def.boss));
     }
     this.onChange();
+    // First time this profile has ever played: teach the loop before anything
+    // else happens. Afterwards it lives behind the pause button.
+    const prog = this.progress();
+    if (!prog.seenHelp) {
+      prog.seenHelp = true;
+      Storage.saveProgress(this.profile.id, prog);
+      setTimeout(() => GK.UI.openModal("modal-help"), 250);
+    }
   },
 
   /* ============================ team picker ============================ */
@@ -151,8 +197,9 @@ const App = {
         const on = team.includes(id);
         const card = document.createElement("button");
         card.className = `crit-card${on ? " on" : ""}${open ? "" : " locked"}`;
+        const hat = this.hatFor(id);
         card.innerHTML = open ? `
-          <span class="crit-emoji">${c.emoji}</span>
+          <span class="crit-emoji">${hat ? `<i class="crit-hat">${hat.emoji}</i>` : ""}${c.emoji}</span>
           <span class="crit-info">
             <b>${c.name}</b><span class="crit-blurb">${c.blurb}</span>
             <span class="crit-stats">❤️ ${c.hp} · 👟 ${c.move} · 👊 ${c.atk}${c.range > 1 ? ` · 🎯 ${c.range}` : ""}${c.armour ? ` · 🛡️ ${c.armour}` : ""}</span>
@@ -173,9 +220,42 @@ const App = {
         wrap.appendChild(card);
       }
       this.el("team-count").textContent = `${team.length}/3 chosen`;
+      this.renderHats(render);
     };
     render();
     this.showScreen("team");
+  },
+
+  // Hats are pure decoration, which is exactly why they matter at this age:
+  // pick a critter, then pick a hat, and it turns up on the board.
+  renderHats(refresh) {
+    const prog = this.progress();
+    const stars = Storage.totalStars(prog);
+    const open = unlockedHats(stars);
+    const box = this.el("hat-list");
+    const next = Object.values(HATS).find(h => stars < h.stars);
+    this.el("hat-hint").textContent = next
+      ? `Tap a critter's hat to change it. Next hat at ⭐ ${next.stars}.`
+      : "Every hat unlocked!";
+    box.innerHTML = "";
+    const team = Storage.party(prog, 3);
+    for (const id of team) {
+      const c = CRITTERS[id];
+      const worn = this.hatFor(id);
+      const b = document.createElement("button");
+      b.className = "hat-slot";
+      b.innerHTML = `<span class="hat-crit">${c.emoji}</span><span class="hat-worn">${worn ? worn.emoji : "＋"}</span>`;
+      b.title = `${c.name}: ${worn ? worn.name : "no hat"}`;
+      b.onclick = () => {
+        // Cycle: none → each unlocked hat → none.
+        const order = [null, ...open.map(h => h.id)];
+        const cur = order.indexOf(worn ? worn.id : null);
+        Storage.setHat(this.profile.id, id, order[(cur + 1) % order.length]);
+        Sfx.select();
+        refresh();
+      };
+      box.appendChild(b);
+    }
   },
 
   /* ============================ hot-seat duel ============================ */
@@ -237,9 +317,12 @@ const App = {
     Game.startDuel(this.duel.map, pad(this.duel.a), pad(this.duel.b),
       h === "a" ? { p: 6 } : h === "b" ? { e: 6 } : {});
     this.el("hud-level").textContent = `⚔️ ${DUELS[this.duel.map].name}`;
-    this.lastTurn = null;
+    // Match the starting side so the first onChange doesn't fire a "YOUR TURN"
+    // banner straight over the level's own opening announcement.
+    this.lastTurn = "p";
     this.showScreen("game");
     View.start();
+    Music.start("garden");
     this.onChange();
   },
 
@@ -278,6 +361,18 @@ const App = {
     }
   },
 
+  // "How far can this one go?" in words, next to the dots that answer it on the
+  // board. The number was never written down anywhere before.
+  statLine(u) {
+    const bits = [`❤️ ${u.hp}/${u.maxHp}`];
+    if (u.moved) bits.push("👟 moved already");
+    else bits.push(`👟 moves ${Rules.moveBudget(u)}${u.webbed ? " (stuck!)" : ""}`);
+    bits.push(`👊 hits ${u.atk}`);
+    if (u.range > 1) bits.push(`🎯 range ${u.range}`);
+    if (u.armour) bits.push(`🛡️ ${u.armour}`);
+    return bits.join(" · ");
+  },
+
   refreshBar() {
     const g = Game.g, u = View.sel;
     const bar = this.el("action-bar");
@@ -288,13 +383,26 @@ const App = {
     } else {
       bar.classList.remove("empty");
       const p = u.def.power;
-      card.innerHTML = `
-        <span class="sel-emoji">${u.def.emoji}</span>
-        <span class="sel-info">
-          <b>${u.def.name}</b>
-          <span class="sel-hp"><i style="width:${Math.max(0, u.hp / u.maxHp) * 100}%"></i></span>
-          <span class="sel-num">❤️ ${u.hp}/${u.maxHp}${u.webbed ? " · 🕸️ slowed" : ""}</span>
-        </span>`;
+      if (View.mode === "power") {
+        // Aiming: the card stops being a status readout and becomes the
+        // instructions, because this is the exact moment the player is asking
+        // "what does this button even do?".
+        card.innerHTML = `
+          <span class="sel-emoji">${p.icon}</span>
+          <span class="sel-info">
+            <b>${p.name}</b>
+            <span class="sel-desc">${p.desc}</span>
+            <span class="sel-num">Tap a bug in a purple ring — or tap the button again to cancel.</span>
+          </span>`;
+      } else {
+        card.innerHTML = `
+          <span class="sel-emoji">${u.def.emoji}</span>
+          <span class="sel-info">
+            <b>${u.def.name}</b>
+            <span class="sel-hp"><i style="width:${Math.max(0, u.hp / u.maxHp) * 100}%"></i></span>
+            <span class="sel-num">${this.statLine(u)}</span>
+          </span>`;
+      }
       const pow = this.el("btn-power");
       pow.disabled = !!u.cd || u.acted;
       pow.classList.toggle("armed", View.mode === "power");
@@ -311,6 +419,12 @@ const App = {
     ends.textContent = left ? `End Turn (${left} left)` : "End Turn";
   },
 
+  showHelp() {
+    Sfx.click();
+    GK.UI.closeModal("modal-pause");
+    GK.UI.openModal("modal-help");
+  },
+
   power() { Sfx.click(); View.togglePower(); },
   undo() { if (View.sel) { Game.undoMove(View.sel); View.refresh(); } },
   wait() { if (View.sel) { Game.hold(View.sel); View.afterAct(); } },
@@ -325,8 +439,15 @@ const App = {
   /* ============================ results ============================ */
 
   matchOver(res) {
-    const prog = Storage.recordResult(this.profile.id, res);
+    Storage.recordResult(this.profile.id, res);
     const duel = res.mode === "duel";
+    const prog = Storage.bump(this.profile.id, {
+      ...this.counts,
+      turns: res.turns,
+      perfect: res.win && !duel && res.clean ? 1 : 0,
+      duels: duel && res.win ? 1 : 0,
+    });
+    this.counts = {};
     this.el("res-emoji").textContent = res.win ? (duel ? "🏆" : res.stars === 3 ? "🌟" : "🎉") : "😿";
     this.el("res-title").textContent = duel
       ? `${res.winner === "p" ? "Player 1" : "Player 2"} wins!`
@@ -335,7 +456,7 @@ const App = {
     this.el("res-stars").innerHTML = duel ? "" :
       [0, 1, 2].map(s => `<span class="star ${s < res.stars ? "on" : ""}">★</span>`).join("");
     this.el("res-detail").textContent = duel ? `${prog.duelWins} duels won on this profile`
-      : res.win ? `Finished in ${res.turns} turns (par ${res.par})${res.clean ? " · nobody fell" : ""}`
+      : res.win ? `Finished in ${res.turns} turn${res.turns === 1 ? "" : "s"} (par ${res.par})${res.clean ? " · nobody fell" : ""}`
         : "";
 
     const retry = this.el("res-retry"), next = this.el("res-next");
@@ -360,8 +481,55 @@ const App = {
     }
     this.el("res-finished").style.display =
       (res.win && !duel && res.levelIdx === LEVELS.length - 1) ? "" : "none";
+    this.offerPerk(res, prog);
     setTimeout(() => { if (res.win) Sfx.stars(res.stars); }, 350);
     setTimeout(() => this.showScreen("results"), 900);   // let the last hit land
+  },
+
+  // A win offers a choice of two small permanent boosts. Each is offered once,
+  // so the well runs dry around level 10 rather than snowballing forever.
+  offerPerk(res, prog) {
+    const box = this.el("res-perks");
+    box.innerHTML = "";
+    const choices = res.win && !res.mode.startsWith("duel")
+      ? perkChoices(prog.perks || [], res.levelIdx) : [];
+    box.style.display = choices.length ? "" : "none";
+    if (!choices.length) return;
+    box.innerHTML = `<div class="perk-title">🎁 Pick a reward</div>`;
+    const row = document.createElement("div");
+    row.className = "perk-row";
+    for (const id of choices) {
+      const p = PERKS[id];
+      const b = document.createElement("button");
+      b.className = "perk-card";
+      b.innerHTML = `<span class="perk-icon">${p.icon}</span><b>${p.name}</b><span>${p.desc}</span>`;
+      b.onclick = () => {
+        Storage.takePerk(this.profile.id, id);
+        Sfx.sparkle();
+        box.innerHTML = `<div class="perk-title">🎁 ${p.icon} <b>${p.name}</b> — ${p.desc}</div>`;
+      };
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  },
+
+  /* ============================ trophy shelf ============================ */
+
+  showTrophies() {
+    Sfx.click();
+    const prog = this.progress();
+    const stats = prog.stats || {};
+    this.el("trophy-list").innerHTML = TROPHIES.map(t =>
+      `<div class="trophy"><span class="trophy-icon">${t.icon}</span>
+         <span class="trophy-label">${t.label}</span>
+         <b class="trophy-num">${(stats[t.id] || 0).toLocaleString()}</b></div>`).join("");
+    const perks = (prog.perks || []).map(id => PERKS[id]).filter(Boolean);
+    this.el("trophy-perks").innerHTML = perks.length
+      ? `<h3>🎁 Rewards earned</h3>` + perks.map(p =>
+          `<div class="trophy"><span class="trophy-icon">${p.icon}</span>
+             <span class="trophy-label">${p.name} — ${p.desc}</span></div>`).join("")
+      : `<p class="screen-hint">Win a level to earn your first reward.</p>`;
+    this.showScreen("trophies");
   },
 
   lossText(res) {

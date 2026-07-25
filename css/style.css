@@ -158,5 +158,47 @@ body {
 .sheet-hint { color: #4a5b52; font-size: .9rem; margin: 0 0 12px; }
 .row-btns2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 
+/* ---------------- power explainer, help, hats, perks, trophies ---------------- */
+.sel-desc { font-size: .84rem; color: #e0c8ff; }
+.btn-music.off { opacity: .45; }
+.icon-btn.wide-icon { width: 100%; }
+
+.help-steps { text-align: left; margin: 0 0 16px; padding-left: 22px; color: #223a2c; }
+.help-steps li { margin-bottom: 8px; font-size: .95rem; line-height: 1.35; }
+
+.hat-bar { width: 100%; max-width: 560px; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.hat-list { display: flex; gap: 6px; }
+.hat-slot {
+  position: relative; border: 0; border-radius: 14px; padding: 6px 8px; cursor: pointer;
+  background: rgba(255,255,255,.12); font-size: 22px; line-height: 1;
+}
+.hat-worn { position: absolute; top: -4px; right: -2px; font-size: 15px; }
+.hat-hint { font-size: .8rem; opacity: .8; flex: 1; }
+.crit-emoji { position: relative; }
+.crit-hat { position: absolute; top: -10px; left: 50%; transform: translateX(-45%); font-size: 18px; font-style: normal; }
+
+.res-perks { width: 100%; }
+.perk-title { font-size: .95rem; margin-bottom: 8px; }
+.perk-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.perk-card {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 8px;
+  border: 0; border-radius: 16px; cursor: pointer; font-family: inherit; text-align: center;
+  background: rgba(93,219,122,.18); color: #eaf7ed; outline: 2px solid rgba(93,219,122,.5);
+}
+.perk-card:active { transform: translateY(2px); }
+.perk-card b { font-size: .95rem; }
+.perk-card span:last-child { font-size: .76rem; opacity: .85; }
+.perk-icon { font-size: 26px; }
+
+.trophy-list { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; }
+.trophy-list h3 { margin: 12px 0 2px; font-size: 1rem; opacity: .9; }
+.trophy {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.1); border-radius: 14px; padding: 9px 12px;
+}
+.trophy-icon { font-size: 20px; text-align: center; }
+.trophy-label { font-size: .9rem; }
+.trophy-num { font-size: 1.05rem; color: var(--cc-sun); }
+
 /* A hint only mouse users can act on shouldn't take up space on an iPad. */
 @media (pointer: coarse) { .keys-hint { display: none; } }

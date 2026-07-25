@@ -12,10 +12,12 @@ const { loadScripts } = require("../lib/tools/test-harness.js");
 const ROOT = path.join(__dirname, "..");
 const M = loadScripts({
   baseDir: ROOT,
-  files: ["js/tiles.js", "js/critters.js", "js/enemies.js", "js/levels.js"],
-  exports: ["TILES", "COLS", "CRITTERS", "BUGS", "LEVELS", "DUELS", "DEFAULT_PARTY", "unlockedCritters"],
+  files: ["js/tiles.js", "js/critters.js", "js/enemies.js", "js/levels.js", "js/rewards.js"],
+  exports: ["TILES", "COLS", "CRITTERS", "BUGS", "LEVELS", "DUELS", "WEATHER", "DEFAULT_PARTY",
+            "unlockedCritters", "HATS", "PERKS", "TROPHIES", "perkChoices", "unlockedHats"],
 });
-const { TILES, COLS, CRITTERS, BUGS, LEVELS, DUELS, DEFAULT_PARTY, unlockedCritters } = M;
+const { TILES, COLS, CRITTERS, BUGS, LEVELS, DUELS, WEATHER, DEFAULT_PARTY, unlockedCritters,
+        HATS, PERKS, TROPHIES, perkChoices, unlockedHats } = M;
 
 const tileAt = (rows, r, c) =>
   (r < 0 || c < 0 || r >= rows.length || c >= COLS) ? null : TILES[rows[r][c]];
@@ -26,8 +28,7 @@ const tileAt = (rows, r, c) =>
 function walkable(rows, r, c, { flier = false, leaper = false } = {}) {
   const t = tileAt(rows, r, c);
   if (!t) return false;
-  if (flier) return !t.solid;
-  if (leaper) return !t.solid;
+  if (flier || leaper) return !t.solid;
   return !t.solid && !t.water;
 }
 
@@ -166,6 +167,56 @@ test("duel maps are symmetric enough to be fair", () => {
     }
   });
   assert.deepEqual(fails, []);
+});
+
+test("every named weather is a real one", () => {
+  for (const lv of LEVELS)
+    if (lv.weather) assert.ok(WEATHER[lv.weather], `"${lv.name}" has unknown weather "${lv.weather}"`);
+  assert.deepEqual(WEATHER.wind.dir.length, 2, "wind needs a direction");
+});
+
+test("scenery and pickups are placed somewhere reachable, and never under a spawn", () => {
+  const fails = [];
+  LEVELS.forEach((lv, i) => {
+    const label = `L${i + 1} "${lv.name}"`;
+    const taken = new Set([...lv.party.map(([r, c]) => r + "," + c),
+                           ...lv.bugs.map(b => b.r + "," + b.c)]);
+    lv.rows.forEach((row, r) => [...row].forEach((ch, c) => {
+      const t = TILES[ch];
+      if (!t.pickup && !t.bounce && !t.sticky && !t.hive) return;
+      if (taken.has(r + "," + c)) fails.push(`${label}: ${t.name} at ${r},${c} is under a unit`);
+      // A pickup nobody can walk to is just decoration; check from every spawn.
+      if (t.pickup) {
+        const ok = lv.party.some(sp => flood(lv.rows, sp, {}).has(r + "," + c));
+        if (!ok) fails.push(`${label}: ${t.name} at ${r},${c} is unreachable on foot`);
+      }
+    }));
+  });
+  assert.deepEqual(fails, []);
+});
+
+test("reward tables are sane: hats unlock in order, perks are all applicable", () => {
+  const stars = Object.values(HATS).map(h => h.stars);
+  assert.deepEqual(stars, [...stars].sort((a, b) => a - b), "hats should be listed cheapest first");
+  assert.ok(Math.max(...stars) <= LEVELS.length * 3, "a hat costs more stars than the game contains");
+  assert.equal(unlockedHats(0).length, 0, "nothing free at zero stars");
+  assert.equal(unlockedHats(999).length, Object.keys(HATS).length);
+  for (const [id, p] of Object.entries(PERKS)) {
+    assert.equal(p.id, id);
+    assert.ok(p.name && p.desc && p.icon, `perk ${id} needs presentation`);
+  }
+  // The offer must always be two DIFFERENT perks until the pool runs dry.
+  for (let taken = 0; taken < Object.keys(PERKS).length - 2; taken++) {
+    const have = Object.keys(PERKS).slice(0, taken);
+    for (let lv = 0; lv < LEVELS.length; lv++) {
+      const c = perkChoices(have, lv);
+      assert.equal(c.length, 2, `level ${lv + 1} with ${taken} taken offered ${c.length}`);
+      assert.notEqual(c[0], c[1], "offered the same perk twice");
+      assert.deepEqual(c.filter(id => have.includes(id)), [], "offered a perk already taken");
+    }
+  }
+  assert.deepEqual(perkChoices(Object.keys(PERKS), 0), [], "nothing left to offer");
+  for (const t of TROPHIES) assert.ok(t.icon && t.label && t.id);
 });
 
 test("critter and bug registries are internally consistent", () => {

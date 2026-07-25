@@ -12,6 +12,8 @@ const View = {
   mode: "move",            // "move" | "power" — what a tap on the board means
   reach: new Map(),        // tiles the selection can finish on
   banner: null,            // { text, sub, t } big turn announcement
+  bubbles: [],             // { u, text, t } speech bubbles
+  zoom: null,              // { r, c, t, dur } camera punch
   aiWait: 0,
   shownIntro: false,
   running: false,
@@ -64,14 +66,30 @@ const View = {
   start() {
     this.sel = null; this.mode = "move"; this.reach = new Map();
     this.aiWait = 0; this.shownIntro = false;
+    this.bubbles = []; this.zoom = null;
+    Fx.timeScale = 1;
     Fx.reset();
     for (const u of Game.g.units) { u.sx = u.c; u.sy = u.r; }
     this.resize();                       // the stage only has a size once shown
     this.selectNext();
-    this.say(Game.g.mode === "duel" ? "PLAYER 1" : "YOUR TURN", Game.g.level ? Game.g.level.hint : "");
+    const lv = Game.g.level;
+    const w = lv && lv.weather && WEATHER[lv.weather];
+    this.say(
+      Game.g.mode === "duel" ? "PLAYER 1" : w ? `${w.icon} ${w.name.toUpperCase()}` : "YOUR TURN",
+      w ? w.blurb : lv ? lv.hint : "");
   },
 
   say(text, sub) { this.banner = { text, sub: sub || "", t: 0 }; },
+
+  // A quick shove of the camera toward something important (a boss arriving).
+  // Taps are ignored while it runs, so nobody loses a move to a moving board.
+  punchZoom(u) { if (u) this.zoom = { r: u.r, c: u.c, t: 0, dur: 1.3 }; },
+
+  zoomFactor() {
+    if (!this.zoom) return 1;
+    const k = this.zoom.t / this.zoom.dur;               // 0..1
+    return 1 + 0.34 * Math.sin(Math.min(1, k) * Math.PI);
+  },
 
   /* ============================ input ============================ */
 
@@ -85,6 +103,7 @@ const View = {
   onTap(e) {
     const g = Game.g;
     if (!g || g.state !== "playing" || !Game.isHuman(g.turn)) return;
+    if (this.zoom) return;                  // the board is moving — don't misread a tap
     e.preventDefault();
     const { r, c } = this.cellAt(e);
     if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) { this.select(null); return; }
@@ -184,6 +203,12 @@ const View = {
       this.banner.t += dt;
       if (this.banner.t > 1.9) this.banner = null;
     }
+    if (this.zoom) {
+      this.zoom.t += dt;
+      if (this.zoom.t > this.zoom.dur) this.zoom = null;
+    }
+    for (const b of this.bubbles) b.t += dt;
+    this.bubbles = this.bubbles.filter(b => b.t < 1.6);
     Fx.update(dt);
     GK.Debug.frame(dt);
     this.render();
@@ -195,17 +220,27 @@ const View = {
   py(r) { return this.oy + r * this.cell; },
 
   render() {
-    const g = Game.g, ctx = this.ctx, cell = this.cell;
+    const g = Game.g, ctx = this.ctx;
     ctx.clearRect(0, 0, this.W, this.H);
     this.drawSurround();
 
+    const z = this.zoomFactor();
+    if (z !== 1) {
+      const cx = this.px(this.zoom.c) + this.cell / 2, cy = this.py(this.zoom.r) + this.cell / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(z, z);
+      ctx.translate(-cx, -cy);
+    }
     for (let r = 0; r < g.rows; r++) {
       for (let c = 0; c < g.cols; c++) this.drawTile(r, c);
     }
     this.drawHighlights();
     // Draw from the top down so a critter never hides the one behind it.
     for (const u of [...g.units].filter(u => u.alive).sort((a, b) => a.sy - b.sy)) this.drawUnit(u);
+    this.drawBubbles();
     Fx.render(ctx);
+    if (z !== 1) ctx.restore();
     this.drawBanner();
   },
 
@@ -270,6 +305,12 @@ const View = {
       water: ["#2a6a97", "#2f74a4", "#27618c"],
       thorn: ["#5c4a2e", "#644f31", "#55452b"],
       berry: ["#3f7a45", "#457f49", "#3a7241"],
+      hive:  ["#8a6a2a", "#96742f", "#7d5f26"],
+      shroom: ["#47854d", "#4d8b52", "#427f49"],
+      honey: ["#7d6420", "#886d25", "#735c1d"],
+      apple: ["#3f7a45", "#457f49", "#3a7241"],
+      acorn: ["#3f7a45", "#457f49", "#3a7241"],
+      clover: ["#3f7a45", "#457f49", "#3a7241"],
     };
     ctx.fillStyle = (shades[t.id] || shades.grass)[h % 3];
     ctx.fillRect(x, y, cell, cell);
@@ -303,6 +344,13 @@ const View = {
       const bob = Math.sin(performance.now() / 300 + c) * cell * .05;
       ctx.font = `${Math.round(cell * .55)}px serif`;
       ctx.fillText("🍓", x + mid, y + mid + bob);
+    } else if (t.emoji) {
+      // Everything else that has a face: hives, mushrooms, honey, pickups.
+      // Pickups bob so they read as "come and get me" rather than scenery.
+      const live = t.pickup || t.bounce;
+      const bob = live ? Math.sin(performance.now() / 320 + r + c) * cell * .06 : 0;
+      ctx.font = `${Math.round(cell * (t.solid ? .55 : .5))}px serif`;
+      ctx.fillText(t.emoji, x + mid, y + mid + bob);
     } else if (h % 7 === 0) {
       ctx.font = `${Math.round(cell * .3)}px serif`;
       ctx.globalAlpha = .75;
@@ -333,15 +381,91 @@ const View = {
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
-      for (const o of Rules.targetsFor(g, this.sel)) this.ring(o, `rgba(255,110,110,${.6 + pulse * .4})`);
+      for (const o of Rules.targetsFor(g, this.sel)) {
+        this.ring(o, `rgba(255,110,110,${.6 + pulse * .4})`);
+        this.tag(o, "-" + Rules.damageOf(g, this.sel, o), "#ff9a8a");
+      }
     } else {
-      for (const o of Rules.powerTargets(g, this.sel)) this.ring(o, `rgba(210,140,255,${.65 + pulse * .35})`);
+      for (const o of Rules.powerTargets(g, this.sel)) {
+        this.ring(o, `rgba(210,140,255,${.65 + pulse * .35})`);
+        this.drawPowerPreview(this.sel, o, pulse);
+      }
     }
 
     // The selected critter's own tile.
     ctx.strokeStyle = "#ffe27a";
     ctx.lineWidth = 3;
     ctx.strokeRect(this.px(this.sel.c) + 2, this.py(this.sel.r) + 2, cell - 4, cell - 4);
+  },
+
+  // Show what a special will actually DO before it's used: where the bug ends
+  // up, how much it hurts, and a splash if the shove would put it in the pond.
+  // "Gust" and "Tongue Snap" mean nothing to a child; an arrow into the water
+  // needs no explaining at all.
+  drawPowerPreview(u, target, pulse) {
+    const g = Game.g, ctx = this.ctx, cell = this.cell, p = u.def.power;
+    const centre = (r, c) => [this.px(c) + cell / 2, this.py(r) + cell / 2];
+
+    if (p.kind === "heal") { this.tag(target, "+" + p.heal, "#8affb0"); return; }
+    this.tag(target, "-" + Rules.powerDamage(p), "#ffb0ff");
+
+    let pv = null;
+    if (p.kind === "push") pv = Rules.pushPreview(g, u, target, p.push);
+    else if (p.kind === "pull") pv = Rules.pullPreview(g, u, target);
+    else if (p.kind === "charge") {
+      // Trace the lane the roll will plough through.
+      const sr = Math.sign(target.r - u.r), sc = Math.sign(target.c - u.c);
+      const [x1, y1] = centre(u.r, u.c);
+      const [x2, y2] = centre(u.r + sr * p.range, u.c + sc * p.range);
+      ctx.strokeStyle = `rgba(255,200,120,${.5 + pulse * .3})`;
+      ctx.lineWidth = cell * .18;
+      ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.lineCap = "butt";
+      return;
+    } else if (p.kind === "blast") {
+      const [x, y] = centre(target.r, target.c);
+      ctx.font = `${Math.round(cell * .4)}px serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("💥", x, y - cell * .34);
+      return;
+    }
+    if (!pv || (!pv.moved && !pv.immune)) return;
+
+    if (pv.immune) { this.tag(target, "too heavy", "#ffd45e", cell * .5); return; }
+    const [x1, y1] = centre(target.r, target.c);
+    const [x2, y2] = centre(pv.r, pv.c);
+    ctx.strokeStyle = pv.fatal ? "#7ec8f0" : "rgba(255,255,255,.75)";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    // Arrowhead at the landing square.
+    const a = Math.atan2(y2 - y1, x2 - x1), h = cell * .18;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - h * Math.cos(a - 0.5), y2 - h * Math.sin(a - 0.5));
+    ctx.lineTo(x2 - h * Math.cos(a + 0.5), y2 - h * Math.sin(a + 0.5));
+    ctx.closePath();
+    ctx.fillStyle = pv.fatal ? "#7ec8f0" : "rgba(255,255,255,.75)";
+    ctx.fill();
+    if (pv.fatal) {
+      ctx.font = `${Math.round(cell * .46)}px serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("💦", x2, y2);
+    }
+  },
+
+  // A small label pinned above a unit.
+  tag(u, text, colour, dy) {
+    const ctx = this.ctx, cell = this.cell;
+    ctx.font = `bold ${Math.round(cell * .28)}px 'Baloo 2', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const x = this.px(u.c) + cell / 2, y = this.py(u.r) + cell / 2 - (dy || cell * .42);
+    ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.lineWidth = 3;
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = colour;
+    ctx.fillText(text, x, y);
   },
 
   ring(u, colour) {
@@ -384,11 +508,34 @@ const View = {
     ctx.arc(x, y + cell * .06, cell * .37, 0, Math.PI * 2);
     ctx.stroke();
 
-    const bob = u === this.sel ? Math.sin(performance.now() / 220) * cell * .05 : 0;
+    // Idle life: everyone breathes on their own rhythm, the selected critter
+    // bounces, and the winning team throws a little jig.
+    const now = performance.now();
+    const phase = u.uid * 0.9;
+    let bob = Math.sin(now / 620 + phase) * cell * .022;
+    let tilt = 0;
+    if (u === this.sel) bob = Math.sin(now / 220) * cell * .05;
+    if (Game.g.state === "won" && mine) {
+      bob = -Math.abs(Math.sin(now / 190 + phase)) * cell * .22;
+      tilt = Math.sin(now / 190 + phase) * 0.26;
+    }
     ctx.font = `${size}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(u.def.emoji, x, y + bob);
+    if (tilt) {
+      ctx.save();
+      ctx.translate(x, y + bob);
+      ctx.rotate(tilt);
+      ctx.fillText(u.def.emoji, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.fillText(u.def.emoji, x, y + bob);
+    }
+    const hat = mine && App.hatFor && App.hatFor(u.def.id);
+    if (hat) {
+      ctx.font = `${Math.round(size * .55)}px serif`;
+      ctx.fillText(hat.emoji, x + cell * .02, y + bob - size * .5);
+    }
 
     // Health bar under everyone — the whole game is "how much is left?".
     const bw = cell * .62, bh = Math.max(3, cell * .09);
@@ -436,6 +583,50 @@ const View = {
     ctx.restore();
   },
 
+  /* ============================ chatter ============================ */
+  // Critters and bugs say things. It is the cheapest personality there is and
+  // it's what turns pieces on a grid into animals in a garden.
+  say2(u, text) {
+    if (!u || !u.alive) return;
+    this.bubbles = this.bubbles.filter(b => b.u !== u).slice(-3);
+    this.bubbles.push({ u, text, t: 0 });
+  },
+
+  chat(u, kind) {
+    const table = u.side === "p" ? CHATTER.critter : CHATTER.bug;
+    const lines = (CHATTER.own[u.def.id] && CHATTER.own[u.def.id][kind]) || table[kind];
+    if (!lines || !lines.length) return;
+    this.say2(u, lines[Math.floor(Math.random() * lines.length)]);
+  },
+
+  drawBubbles() {
+    const ctx = this.ctx, cell = this.cell;
+    for (const b of this.bubbles) {
+      if (!b.u.alive && b.t > 0.4) continue;
+      const a = b.t < .12 ? b.t / .12 : b.t > 1.2 ? Math.max(0, (1.6 - b.t) / .4) : 1;
+      const x = this.px(b.u.sx) + cell / 2;
+      const y = this.py(b.u.sy) + cell / 2 - cell * .62 - Math.min(8, b.t * 14);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.font = `bold ${Math.max(10, Math.round(cell * .26))}px 'Baloo 2', sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const w = ctx.measureText(b.text).width + cell * .3, h = cell * .38;
+      ctx.fillStyle = b.u.side === "p" ? "rgba(255,255,255,.94)" : "rgba(255,214,214,.94)";
+      this.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+      ctx.fill();
+      ctx.beginPath();                       // little tail pointing at the speaker
+      ctx.moveTo(x - cell * .07, y + h / 2 - 1);
+      ctx.lineTo(x + cell * .07, y + h / 2 - 1);
+      ctx.lineTo(x, y + h / 2 + cell * .12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#1a2b20";
+      ctx.fillText(b.text, x, y);
+      ctx.restore();
+    }
+  },
+
   /* ============================ event reactions ============================ */
   // Sound and particles for whatever the engine just did.
   onEvent(ev) {
@@ -446,12 +637,14 @@ const View = {
       case "attack": case "sweep": {
         Sfx.whack();
         Fx.addShake(ev.type === "sweep" ? 6 : 3);
+        this.chat(u, "hit");
         break;
       }
       case "power": {
         Sfx[ev.power.kind === "heal" ? "sparkle" : ev.power.kind === "pull" ? "gulp" : "zap"]();
         const p = at(u);
         Fx.burst(p.x, p.y, u.def.color, 12, 130, .5, 3);
+        this.chat(u, "power");
         break;
       }
       case "damage": {
@@ -460,6 +653,7 @@ const View = {
         Fx.text(p.x, p.y - this.cell * .3, "-" + ev.amount, { color: "#ff8a8a", size: 15 });
         Fx.burst(p.x, p.y, "#ff6b6b", 6, 90, .35, 2.2);
         if (u.side === "p") Sfx.hurt();
+        if (ev.amount >= 4 || u.hp <= u.maxHp * .34) this.chat(u, "hurt");
         break;
       }
       case "heal": {
@@ -470,10 +664,22 @@ const View = {
       case "splash": {
         Sfx.splash();
         const p = at(u);
-        Fx.burst(p.x, p.y, "#7ec8f0", 18, 150, .6, 3);
+        // A proper fountain: a wide low burst plus a column of droplets thrown
+        // straight up, so the signature move of the game gets the biggest
+        // reaction on the board.
+        Fx.burst(p.x, p.y, "#7ec8f0", 22, 170, .7, 3.4);
+        Fx.burst(p.x, p.y - this.cell * .2, "#cdeeff", 14, 90, .9, 2.4);
+        Fx.addShake(5);
+        this.chat(u, "splash");
         break;
       }
-      case "berry": { Sfx.berry(); const p = at(u); Fx.burst(p.x, p.y, "#ff6f91", 16, 140, .6, 3); break; }
+      case "berry": {
+        Sfx.berry();
+        const p = at(u);
+        Fx.burst(p.x, p.y, "#ff6f91", 16, 140, .6, 3);
+        this.chat(u, "berry");
+        break;
+      }
       case "rubble": {
         Sfx.crumble();
         Fx.burst(this.px(ev.c) + this.cell / 2, this.py(ev.r) + this.cell / 2, "#9aa0a6", 14, 120, .5, 3);
@@ -481,9 +687,14 @@ const View = {
       }
       case "ko": {
         const p = at(u);
-        Fx.burst(p.x, p.y, u.side === "p" ? u.def.color : "#c0392b", 20, 160, .7, 3.4);
+        Fx.burst(p.x, p.y, u.side === "p" ? u.def.color : "#c0392b", 24, 175, .8, 3.6);
         Sfx[u.side === "p" ? "down" : "bugDown"]();
-        Fx.addShake(5);
+        Fx.addShake(8);
+        // A beat of slow motion on the finishing blow. In a game where one move
+        // takes half a minute to choose, the payoff has to land.
+        Fx.timeScale = 0.35;
+        clearTimeout(this._slowmo);
+        this._slowmo = setTimeout(() => { Fx.timeScale = 1; }, 260);
         break;
       }
       case "summon": {
@@ -492,8 +703,32 @@ const View = {
         if (ev.reinforcement) GK.UI.toast("More bugs are coming!");
         break;
       }
-      case "web": Sfx.zap(); break;
-      case "win": Sfx.victory(); Fx.confetti(this.W, this.H, ["#5ddb7a", "#ffd45e", "#ff6f91", "#63b8ff"], 90); break;
+      case "web": case "stuck": Sfx.zap(); break;
+      case "bounce": { Sfx.hop(); const p = at(u); Fx.burst(p.x, p.y, "#9ae06b", 10, 120, .4, 2.4); break; }
+      case "slide": Sfx.step(); break;
+      case "pickup": {
+        Sfx[ev.kind === "heal" ? "sparkle" : ev.kind === "lucky" ? "berry" : "gulp"]();
+        const p = at(u);
+        Fx.burst(p.x, p.y, ev.kind === "lucky" ? "#8affb0" : "#ffd45e", 16, 140, .6, 3);
+        break;
+      }
+      case "hive": {
+        Sfx.crumble();
+        const x = this.px(ev.c) + this.cell / 2, y = this.py(ev.r) + this.cell / 2;
+        Fx.burst(x, y, "#ffd45e", 26, 190, .8, 3);
+        Fx.addShake(7);
+        GK.UI.toast("🐝 The bees are angry!");
+        break;
+      }
+      case "weather": if (ev.weather === "wind") Sfx.step(); break;
+      case "win": {
+        Sfx.victory();
+        Music.stop();
+        Fx.confetti(this.W, this.H, ["#5ddb7a", "#ffd45e", "#ff6f91", "#63b8ff"], 90);
+        const team = Game.units("p");
+        team.forEach((t, i) => setTimeout(() => this.chat(t, "win"), 200 + i * 260));
+        break;
+      }
       case "lose": Sfx.defeat(); break;
     }
   },

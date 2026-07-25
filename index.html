@@ -30,6 +30,7 @@
     <button class="btn ghost" id="btn-install" style="display:none">📲 Add to Home Screen</button>
     <div class="splash-foot">
       <span id="sync-badge">…</span>
+      <button class="btn-music icon-btn" title="Music on/off">🎵</button>
       <button class="btn-sound icon-btn">🔊</button>
     </div>
   </div>
@@ -57,6 +58,7 @@
   <div class="map-actions">
     <button class="btn blue" id="btn-team" onclick="App.showTeam()">🐾 My Team</button>
     <button class="btn blue" onclick="App.showDuel()">⚔️ Two Players</button>
+    <button class="btn blue" onclick="App.showTrophies()">🏅 Trophies</button>
   </div>
   <div class="level-grid" id="level-grid"></div>
 </div>
@@ -69,7 +71,22 @@
     <span class="map-stat" id="team-count"></span>
   </header>
   <p class="screen-hint">Pick three critters to take into battle. Everyone has one special power.</p>
+  <div class="hat-bar">
+    <div class="hat-list" id="hat-list"></div>
+    <span class="hat-hint" id="hat-hint"></span>
+  </div>
   <div class="team-list" id="team-list"></div>
+</div>
+
+<!-- Trophy shelf -->
+<div class="screen" id="screen-trophies">
+  <header class="bar">
+    <button class="icon-btn" onclick="App.showMap()">←</button>
+    <h2>🏅 Trophy Shelf</h2>
+    <button class="btn-sound icon-btn">🔊</button>
+  </header>
+  <div class="trophy-list" id="trophy-list"></div>
+  <div class="trophy-list" id="trophy-perks"></div>
 </div>
 
 <!-- Hot-seat duel setup -->
@@ -127,6 +144,7 @@
     <div class="res-stars" id="res-stars"></div>
     <div class="res-detail" id="res-detail"></div>
     <div class="res-unlock" id="res-unlock" style="display:none"></div>
+    <div class="res-perks" id="res-perks" style="display:none"></div>
     <p class="res-finished" id="res-finished" style="display:none">👑 You beat all 20 levels and every boss. The garden is safe!</p>
     <div class="res-actions">
       <button class="btn ghost" onclick="App.showMap()">🗺️ Map</button>
@@ -140,11 +158,31 @@
 <div class="modal" id="modal-pause">
   <div class="sheet">
     <h2>⏸ Paused</h2>
-    <p class="sheet-hint" id="pause-hint">Tap a critter, tap where to go, then tap a bug to attack.</p>
     <div class="row-btns2">
       <button class="btn green" onclick="GK.UI.closeModal('modal-pause')">▶️ Keep Playing</button>
-      <button class="btn grey" onclick="App.quit()">🗺️ Quit</button>
+      <button class="btn blue" onclick="App.showHelp()">❓ How to Play</button>
     </div>
+    <div class="row-btns2" style="margin-top:8px">
+      <button class="btn-sound icon-btn wide-icon">🔊</button>
+      <button class="btn-music icon-btn wide-icon" title="Music on/off">🎵</button>
+    </div>
+    <button class="btn grey wide" style="margin-top:8px" onclick="App.quit()">🗺️ Quit to Map</button>
+  </div>
+</div>
+
+<!-- How to play — shown once per profile, and from the pause menu -->
+<div class="modal" id="modal-help">
+  <div class="sheet">
+    <h2>❓ How to Play</h2>
+    <ol class="help-steps">
+      <li><b>Tap a critter</b> to pick who's going.</li>
+      <li><b>Tap a green dot</b> to walk there. The dots show exactly how far that critter can move — the bar at the bottom says the number.</li>
+      <li><b>Tap a bug</b> with a red ring to bonk it. The number over the bug is the damage you'll do.</li>
+      <li><b>Tap the purple button</b> for that critter's special move. The board then shows what will happen — an arrow for where the bug gets shoved, and 💦 if it's going in the pond.</li>
+      <li>Bugs <b>can't swim</b>. Pushing one into the water beats three hits.</li>
+      <li>Everyone gets one go per turn, then tap <b>End Turn</b>.</li>
+    </ol>
+    <button class="btn green wide" onclick="GK.UI.closeModal('modal-help')">Got it!</button>
   </div>
 </div>
 
@@ -174,6 +212,8 @@
 <script src="js/critters.js"></script>
 <script src="js/enemies.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/rewards.js"></script>
+<script src="js/chatter.js"></script>
 <!-- systems -->
 <script src="js/rules.js"></script>
 <script src="js/ai.js"></script>

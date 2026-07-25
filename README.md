@@ -23,12 +23,24 @@ take as long as you like on every move.
   optional health handicap so a four-year-old can beat an eight-year-old.
 - **Stars** for winning inside par with the whole team standing, a family
   leaderboard, and progress that follows you between devices.
+- **A garden that fights back** — beehives that burst over anything beside them,
+  bouncy mushrooms that fling you two squares on, sticky honey, and apples,
+  acorns and lucky clovers worth going out of your way for. Some levels are
+  windy, rainy or sunny, which changes how a turn plays.
+- **Rewards**: a choice of two permanent perks after every win, cosmetic hats
+  unlocked with stars, and a trophy shelf of lifetime tallies.
+- Music, and critters that talk back.
 
 ## How to play
 
 Tap a critter, tap a green dot to walk there, then tap a bug to attack — or hit
 the purple power button to aim its special. **Undo** takes a move back until you
 attack, **Wait** finishes a critter's go, **End Turn** hands over to the bugs.
+
+Aiming a special shows you exactly what it will do before you commit: an arrow
+for where the bug gets shoved, 💦 if that lands it in the pond, and the damage
+over every target. A How to Play card appears the first time each player starts,
+and lives behind the pause button after that.
 
 ## Built on gamekit
 
@@ -44,11 +56,12 @@ node "../gamekit/tools/sync-to-game.js" "../critter-clash"
 
 | Path | What's in it |
 |---|---|
-| `js/tiles.js` `critters.js` `enemies.js` `levels.js` | Data registries — a new critter, bug or level is one entry |
+| `js/tiles.js` `critters.js` `enemies.js` `levels.js` `rewards.js` `chatter.js` | Data registries — a new critter, bug, level, hat, perk or catchphrase is one entry |
 | `js/rules.js` | Movement, damage, pushing, powers. Pure functions over the match state |
 | `js/ai.js` | One utility scorer, used by the bugs and by the test bot |
 | `js/game.js` | Turn engine. No DOM, no canvas, no audio |
-| `js/render.js` | Canvas, input, animation, and the pacing of the bugs' turn |
+| `js/render.js` | Canvas, input, animation, speech bubbles, and the pacing of the bugs' turn |
+| `js/audio.js` | Sound effects plus the lookahead music scheduler |
 | `js/main.js` | Screens, level map, team picker, duel setup, results |
 | `tests/` | Level linter, headless balance bot, save-merge tests |
 

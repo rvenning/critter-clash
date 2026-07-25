@@ -1,6 +1,6 @@
 // Critter Clash service worker — network-first, cache fallback.
 // BUMP the cache name on ANY shell change or devices keep serving the old build.
-const CACHE = "critter-clash-v1";
+const CACHE = "critter-clash-v2";
 const SHELL = [
   ".",
   "index.html",
@@ -20,6 +20,8 @@ const SHELL = [
   "js/critters.js",
   "js/enemies.js",
   "js/levels.js",
+  "js/rewards.js",
+  "js/chatter.js",
   "js/rules.js",
   "js/ai.js",
   "js/game.js",

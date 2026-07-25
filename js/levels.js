@@ -11,6 +11,16 @@
 //
 // Bosses at 7, 14 and 20. Prickle joins after level 8, Buzz after level 14.
 
+// One optional rule per level, announced on the opening banner.
+const WEATHER = {
+  wind: { id: "wind", icon: "🌬️", name: "Windy", dir: [0, 1],
+          blurb: "A breeze pushes everyone in the open one square east each turn. Bushes shelter you." },
+  rain: { id: "rain", icon: "🌧️", name: "Rainy",
+          blurb: "Wet grass! A long dash slides you one extra square." },
+  sun:  { id: "sun",  icon: "☀️", name: "Sunny",
+          blurb: "Warm sunshine — your critters heal 1 health each turn." },
+};
+
 const LEVELS = [
   {
     name: "Sunny Meadow", objective: "defeat", par: 5, limit: 15,
@@ -61,16 +71,16 @@ const LEVELS = [
     bugs: [{ t: "beetle", r: 1, c: 2 }, { t: "beetle", r: 1, c: 5 }, { t: "ant", r: 0, c: 4 }],
   },
   {
-    name: "Thorn Patch", objective: "defeat", par: 7, limit: 18,
+    name: "Thorn Patch", objective: "defeat", par: 7, limit: 18, weather: "wind",
     hint: "Thorns prickle anyone who steps on them — bugs included.",
     rows: [
       "........",
       ".^^..^^.",
       "........",
-      "..^..^..",
+      "..^oo^..",
       "........",
       ".^^..^^.",
-      "........",
+      "...+....",
       "........",
     ],
     party: [[7, 1], [7, 4], [7, 6]],
@@ -97,12 +107,12 @@ const LEVELS = [
     hint: "Digger's Quake shatters the rocks around him.",
     rows: [
       "........",
-      ".######.",
+      ".###H##.",
       "........",
       ".##..##.",
       "........",
-      ".######.",
-      "........",
+      ".##H###.",
+      "...n....",
       "........",
     ],
     party: [[7, 1], [7, 4], [7, 6]],
@@ -150,12 +160,12 @@ const LEVELS = [
     ],
   },
   {
-    name: "Three Berries", objective: "collect", par: 8, limit: 20,
+    name: "Three Berries", objective: "collect", par: 8, limit: 20, weather: "sun",
     hint: "Collect all three berries. Split up — you have three critters!",
     rows: [
       "*......*",
       "..####..",
-      "........",
+      "..&..&..",
       ".#....#.",
       "........",
       "..%..%..",
@@ -209,7 +219,7 @@ const LEVELS = [
     ],
   },
   {
-    name: "Scorpion Gully", objective: "defeat", par: 9, limit: 22,
+    name: "Scorpion Gully", objective: "defeat", par: 9, limit: 22, weather: "rain",
     hint: "The scorpion hits hard AND knocks you back. Gang up on it.",
     rows: [
       "..#..#..",
@@ -229,7 +239,7 @@ const LEVELS = [
     ],
   },
   {
-    name: "Island Hop", objective: "reach", par: 7, limit: 16,
+    name: "Island Hop", objective: "reach", par: 7, limit: 16, weather: "sun",
     hint: "Walkers go the long way round. Flyers go straight over.",
     rows: [
       "...*....",
@@ -239,7 +249,7 @@ const LEVELS = [
       "..~~~~..",
       "..~~~~..",
       "........",
-      "........",
+      "...l....",
     ],
     party: [[7, 1], [7, 4], [7, 6]],
     bugs: [
@@ -272,8 +282,8 @@ const LEVELS = [
     rows: [
       "*..^^..*",
       ".##..##.",
-      "........",
-      "^..##..^",
+      "...++...",
+      "^..HH..^",
       "........",
       ".##..##.",
       "...*....",
@@ -331,8 +341,8 @@ const LEVELS = [
     rows: [
       "@......@",
       ".%....%.",
-      "..#..#..",
-      "........",
+      "..H..H..",
+      "...nn...",
       "..~~~~..",
       "........",
       ".%....%.",
@@ -366,7 +376,7 @@ const LEVELS = [
     ],
   },
   {
-    name: "Scorpion King's Court", objective: "defeat", par: 12, limit: 28, boss: "king",
+    name: "Scorpion King's Court", objective: "defeat", par: 12, limit: 28, boss: "king", weather: "wind",
     hint: "The final bug. His tail sweeps EVERYONE beside him — don't crowd in.",
     rows: [
       // Ponds at the EDGES, not across the middle: a full-width pond makes the
@@ -375,8 +385,8 @@ const LEVELS = [
       "@......@",
       "...##...",
       "........",
-      ".^....^.",
-      "........",
+      ".^+..+^.",
+      "..o..o..",
       "~~....~~",
       "........",
       "@......@",

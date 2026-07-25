@@ -116,7 +116,7 @@ const AI = {
   chargeValue(g, u, target, p, w) {
     const sr = Math.sign(target.r - u.r), sc = Math.sign(target.c - u.c);
     let s = 0;
-    for (let i = 1; i <= p.range; i++) {
+    for (let i = 1; i <= u.powerRange; i++) {
       const r = u.r + sr * i, c = u.c + sc * i, t = Rules.tile(g, r, c);
       if (!t || t.solid) break;
       const o = Rules.unitAt(g, r, c);
@@ -126,30 +126,11 @@ const AI = {
     return s;
   },
 
-  // Would a shove put them in the pond? This is the signature move of the
-  // game, so both the bugs and the test bot need to see it coming.
-  pushIsFatal(g, u, target, dist) {
-    if (target.def.flier || target.def.heavy) return false;
-    const dr = target.r - u.r, dc = target.c - u.c;
-    let sr = 0, sc = 0;
-    if (Math.abs(dr) >= Math.abs(dc)) sr = Math.sign(dr) || -1; else sc = Math.sign(dc);
-    let r = target.r, c = target.c;
-    for (let i = 0; i < dist; i++) {
-      const nr = r + sr, nc = c + sc, t = Rules.tile(g, nr, nc);
-      if (!t || t.solid || Rules.unitAt(g, nr, nc)) return false;
-      r = nr; c = nc;
-      if (t.water) return true;
-    }
-    return false;
-  },
-
-  pullIsFatal(g, u, target) {
-    if (target.def.flier || target.def.heavy) return false;
-    const dr = Math.sign(u.r - target.r), dc = Math.sign(u.c - target.c);
-    const [sr, sc] = Math.abs(u.r - target.r) >= Math.abs(u.c - target.c) ? [dr, 0] : [0, dc];
-    const t = Rules.tile(g, target.r + sr, target.c + sc);
-    return !!(t && t.water && !Rules.unitAt(g, target.r + sr, target.c + sc));
-  },
+  // Would a shove put them in the pond? The signature move of the game — the
+  // same preview the renderer draws for the player, so what the AI sees and
+  // what the arrow promises can never disagree.
+  pushIsFatal(g, u, target, dist) { return Rules.pushPreview(g, u, target, dist).fatal; },
+  pullIsFatal(g, u, target) { return Rules.pullPreview(g, u, target).fatal; },
 
   // Which enemies is this unit actually interested in?
   chaseTargets(u, foes, w) {
@@ -207,7 +188,7 @@ const AI = {
           : Rules.dist(u, o);
         if (d < bestD) bestD = d;
       }
-      const want = w.prefRange === null ? (u.def.range || 1) : w.prefRange;
+      const want = w.prefRange === null ? u.range : w.prefRange;
       s -= Math.abs(bestD - want) * w.approach;
     }
 
@@ -225,8 +206,8 @@ const AI = {
     // half of Zip — so wounded critters start looking for safer ground.
     let risk = 0;
     for (const o of foes) {
-      const reach = Rules.moveBudget(o) + (o.def.range || 1);
-      if (Rules.dist(u, o) <= reach) risk += o.def.atk;
+      const reach = Rules.moveBudget(o) + o.range;
+      if (Rules.dist(u, o) <= reach) risk += o.atk;
     }
     s -= (risk / Math.max(3, u.hp)) * 12 * w.risk;
     return s;

@@ -78,6 +78,7 @@ const Game = {
       lost: 0,                       // critters knocked out this match
       human: { p: true, e: false },
       handicap: opts.handicap || {},
+      perks: opts.perks || [],
     };
     // Every state change in the match funnels through here: the engine counts
     // its own casualties (a lost critter costs a star) and passes the event on
@@ -89,15 +90,22 @@ const Game = {
     return g;
   },
 
+  // Stats are copied onto the unit rather than read from the registry, because
+  // perks and handicaps change them per match — writing to `def` would leak
+  // one profile's upgrades into every other game on the device.
   makeUnit(def, side, r, c, g) {
     const bonus = (g.handicap && g.handicap[side]) || 0;
-    return {
+    const u = {
       uid: g.uid++, def, side, r, c,
       hp: def.hp + bonus, maxHp: def.hp + bonus,
+      move: def.move, atk: def.atk, range: def.range || 1, armour: def.armour || 0,
+      powerRange: def.power ? def.power.range : 0,
+      cdBonus: 0, brave: false,
       cd: 0, webbed: 0, alive: true,
       moved: false, acted: false, prev: null,
       sx: c, sy: r,                 // smoothed draw position, eased by render.js
     };
+    return applyPerks(g.perks, def, u);
   },
 
   countBerries(g) {
@@ -119,8 +127,39 @@ const Game = {
       if (u.cd > 0) u.cd--;
       if (u.webbed > 0) u.webbed--;
     }
+    if (side === "p") this.weatherPhase();
     if (!this.isHuman(side)) { this.summonPhase(side); this.reinforcePhase(); }
     this.changed();
+  },
+
+  // One extra rule for the whole level, announced on the banner. Deliberately
+  // never lethal on its own: the wind won't blow anybody into the pond, because
+  // losing a critter to weather you didn't choose is just unfair.
+  weatherPhase() {
+    const g = this.g;
+    const w = g.level && g.level.weather;
+    if (!w || g.turnNo < 2) return;
+    if (w === "sun") {
+      for (const u of this.units("p")) if (u.hp < u.maxHp) Rules.heal(g, u, 1);
+      g.emit({ type: "weather", weather: "sun" });
+      return;
+    }
+    if (w === "wind") {
+      const [dr, dc] = WEATHER.wind.dir;
+      // Nudge everyone standing in the open. Cover shelters you, and a unit
+      // already against something solid just holds on.
+      for (const u of [...g.units].filter(u => u.alive)) {
+        const here = Rules.tile(g, u.r, u.c);
+        if (!here || here.cover || u.def.heavy) continue;
+        const nr = u.r + dr, nc = u.c + dc, t = Rules.tile(g, nr, nc);
+        if (!t || t.solid || t.water || Rules.unitAt(g, nr, nc)) continue;
+        u.r = nr; u.c = nc;
+        g.emit({ type: "shove", u });
+        Rules.landOn(g, u, [dr, dc]);
+      }
+      g.emit({ type: "weather", weather: "wind" });
+    }
+    // "rain" is handled in Rules.moveTo — a long move slides one extra square.
   },
 
   // "Survive" levels send fresh bugs in over the top edge. Without them,

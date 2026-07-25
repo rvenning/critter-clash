@@ -18,12 +18,12 @@ const { loadScripts } = require("../lib/tools/test-harness.js");
 const ROOT = path.join(__dirname, "..");
 const M = loadScripts({
   baseDir: ROOT,
-  files: ["js/tiles.js", "js/critters.js", "js/enemies.js", "js/levels.js",
+  files: ["js/tiles.js", "js/critters.js", "js/enemies.js", "js/levels.js", "js/rewards.js",
           "js/rules.js", "js/ai.js", "js/game.js"],
   exports: ["TILES", "COLS", "CRITTERS", "BUGS", "LEVELS", "DUELS", "DEFAULT_PARTY",
-            "Rules", "AI", "Game", "BEHAVIOUR"],
+            "Rules", "AI", "Game", "BEHAVIOUR", "PERKS"],
 });
-const { TILES, CRITTERS, LEVELS, DEFAULT_PARTY, Rules, AI, Game, BEHAVIOUR } = M;
+const { TILES, CRITTERS, LEVELS, DEFAULT_PARTY, Rules, AI, Game, BEHAVIOUR, PERKS } = M;
 
 // The team a kid actually has at that point in the campaign.
 function partyFor(levelIdx) {
@@ -47,13 +47,13 @@ function goalsOf(g) {
 
 // Play one level to the end. `mode` "play" uses the AI for the player team;
 // "idle" never touches the controls, which is the control group.
-function playLevel(idx, { mode = "play", party = null, log = null } = {}) {
+function playLevel(idx, { mode = "play", party = null, log = null, perks = [] } = {}) {
   const events = { splash: 0, ko: 0, power: 0 };
   Game.onEvent = (ev) => { if (ev.type in events) events[ev.type]++; };
   Game.onDone = null;
   Game.onChange = null;
 
-  const g = Game.startLevel(idx, party || partyFor(idx));
+  const g = Game.startLevel(idx, party || partyFor(idx), { perks });
   const survive = g.objective === "survive";
   let guard = 200;
 
@@ -171,6 +171,32 @@ test("a weaker team can still clear the early levels", () => {
     }
   }
   assert.deepEqual(fails, []);
+});
+
+test("perks help without erasing the game", () => {
+  // Rewards stack up over the campaign, so the end state is a team carrying
+  // every perk at once. That must still be a game — if the last levels fall
+  // over in two turns, the rewards have eaten the difficulty.
+  const all = Object.keys(PERKS);
+  const fails = [];
+  for (let i = 6; i < LEVELS.length; i++) {
+    const lv = LEVELS[i];
+    if (lv.objective === "survive") continue;
+    const r = playLevel(i, { perks: all });
+    // A race level SHOULD get shorter when the team is faster — that's the
+    // reward working. A fight that ends in two turns means it's been erased.
+    const floor = lv.objective === "reach" ? 2 : 3;
+    if (!r.win) fails.push(`L${i + 1} "${lv.name}": lost even fully perked (${r.why})`);
+    else if (r.turns < floor) fails.push(`L${i + 1} "${lv.name}": trivial with every perk (${r.turns} turns)`);
+  }
+  assert.deepEqual(fails, []);
+});
+
+test("a fully perked team is stronger than a bare one", () => {
+  // The other direction: if the rewards do nothing, they're a lie.
+  const bare = playLevel(19), perked = playLevel(19, { perks: Object.keys(PERKS) });
+  assert.ok(perked.win, "the finale should be winnable with every perk");
+  assert.ok(perked.turns <= bare.turns, `perks made the finale slower (${bare.turns} → ${perked.turns})`);
 });
 
 /* Run directly for the per-level table. */

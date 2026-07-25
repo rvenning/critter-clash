@@ -12,7 +12,11 @@ const PROGRESS = {
   blank: () => ({
     levels: {},            // { [idx]: { stars, turns } } best result per level
     party: null,           // chosen loadout, e.g. ["hop","digger","zip"]
+    hats: {},              // { [critterId]: hatId } — cosmetic only
+    perks: [],             // permanent boosts chosen after a level win
+    stats: {},             // lifetime counters for the trophy shelf
     duelWins: 0,
+    seenHelp: false,
     updated: 0,
   }),
 
@@ -25,10 +29,17 @@ const PROGRESS = {
         turns: Math.min(cur.turns || 999, lv.turns || 999),   // fewer turns is better
       };
     }
+    // Trophy counters are lifetime totals, so the bigger number is the one
+    // that has seen more play. Perks and hats are sets: keep everything.
+    const stats = { ...(a.stats || {}) };
+    for (const [k, v] of Object.entries(b.stats || {})) stats[k] = Math.max(stats[k] || 0, v || 0);
+    const perks = [...new Set([...(a.perks || []), ...(b.perks || [])])];
     return {
       ...a, ...b,
-      levels,
+      levels, stats, perks,
+      hats: { ...(a.hats || {}), ...(b.hats || {}) },
       duelWins: Math.max(a.duelWins || 0, b.duelWins || 0),
+      seenHelp: !!(a.seenHelp || b.seenHelp),
       party: b.party || a.party,
     };
   },
@@ -73,6 +84,31 @@ Object.assign(Storage, {
   saveParty(profileId, party) {
     const prog = this.getProgress(profileId);
     prog.party = party;
+    this.saveProgress(profileId, prog);
+    return prog;
+  },
+
+  // Lifetime counters for the trophy shelf. Monotonic, so max() merging across
+  // devices can never lose a tally.
+  bump(profileId, counts) {
+    const prog = this.getProgress(profileId);
+    prog.stats = prog.stats || {};
+    for (const [k, v] of Object.entries(counts)) prog.stats[k] = (prog.stats[k] || 0) + v;
+    this.saveProgress(profileId, prog);
+    return prog;
+  },
+
+  takePerk(profileId, perkId) {
+    const prog = this.getProgress(profileId);
+    prog.perks = [...new Set([...(prog.perks || []), perkId])];
+    this.saveProgress(profileId, prog);
+    return prog;
+  },
+
+  setHat(profileId, critterId, hatId) {
+    const prog = this.getProgress(profileId);
+    prog.hats = prog.hats || {};
+    if (hatId) prog.hats[critterId] = hatId; else delete prog.hats[critterId];
     this.saveProgress(profileId, prog);
     return prog;
   },
