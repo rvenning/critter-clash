@@ -1,5 +1,13 @@
 // Persistence: gamekit storage configured for Critter Clash.
-// cc_* localStorage keys, "critterclash" Firestore collection.
+// ccl_* localStorage keys, "critterclash" Firestore collection.
+//
+// The prefix must be unique across EVERY family game, not just descriptive:
+// they're all served from https://rvenning.github.io, and localStorage is
+// scoped to the origin, not the path. This started life as "cc", which is
+// Chicken Cross's prefix, so the two games silently shared one profile roster
+// and one set of progress keys — and both store `levels` keyed by index with a
+// `stars` field, so playing one would have overwritten the other's saves.
+// gamekit/tests/prefixes.test.js now fails if two games ever collide again.
 //
 // Nothing here is spendable, so every field merges by max — two devices can
 // never take progress away from each other. The chosen team is the exception:
@@ -46,7 +54,7 @@ const PROGRESS = {
 };
 
 const Storage = GK.createStorage({
-  prefix: "cc",
+  prefix: "ccl",
   collection: "critterclash",
   firebaseConfig: window.FIREBASE_CONFIG,
   blankProgress: PROGRESS.blank,
