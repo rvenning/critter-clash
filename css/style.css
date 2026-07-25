@@ -1,0 +1,162 @@
+/* Critter Clash — a sunlit-garden-after-dark look on top of gamekit.
+   The kit's shapes and components are untouched; only the palette, the level
+   map and the game screen's own furniture live here. */
+
+:root {
+  --gk-accent: #5ddb7a;  --gk-accent-sh: #37a355;
+  --gk-green:  #5ddb7a;  --gk-green-sh:  #37a355;
+  --gk-blue:   #63b8ff;  --gk-blue-sh:   #3a83c4;
+  --cc-deep:   #14261b;
+  --cc-mid:    #1d3626;
+  --cc-leaf:   #2f6b3f;
+  --cc-sun:    #ffe27a;
+}
+
+/* Paint the ROOT, not just the body: with viewport-fit=cover iOS extends the
+   visual viewport past height:100% in standalone mode, and a gap under the
+   home indicator falls through to the page canvas, which paints white. */
+html { background: #14261b; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Baloo 2', 'Comic Sans MS', system-ui, sans-serif;
+  color: #eaf7ed;
+  background:
+    radial-gradient(ellipse at 15% -10%, #2f6b3f 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 110%, #1c4a5a 0%, transparent 50%),
+    linear-gradient(#1d3626, #14261b 70%);
+  background-color: #14261b;   /* AFTER the shorthand — it resets colour */
+  margin: 0;
+}
+
+.screen { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+.bar {
+  width: 100%; max-width: 560px; display: flex; align-items: center; gap: 8px;
+  padding: 4px 0 8px;
+}
+.bar h2 { flex: 1; font-size: 1.2rem; margin: 0; }
+.icon-btn {
+  border: 0; border-radius: 14px; width: 42px; height: 42px; font-size: 20px;
+  background: rgba(255,255,255,.14); color: #fff; cursor: pointer; flex: none;
+}
+.screen-hint { max-width: 560px; opacity: .8; font-size: .95rem; margin: 0 0 10px; text-align: center; }
+
+/* ---------------- splash ---------------- */
+.splash-inner { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: auto; text-align: center; }
+.splash-critters { font-size: 46px; letter-spacing: 6px; }
+.splash-critters span { display: inline-block; animation: hop 1.8s ease-in-out infinite; }
+.splash-critters span:nth-child(2) { animation-delay: .25s; }
+.splash-critters span:nth-child(3) { animation-delay: .5s; }
+@keyframes hop { 0%,100% { transform: translateY(0) } 45% { transform: translateY(-12px) rotate(-6deg) } }
+.logo {
+  font-size: 2.5rem; font-weight: 800; line-height: .95; margin: 0;
+  color: var(--cc-sun); text-shadow: 0 4px 0 #2c5a36, 0 0 26px rgba(93,219,122,.4);
+}
+.logo span { display: block; color: #fff; }
+.tagline { opacity: .85; margin: 0 0 6px; max-width: 320px; }
+.splash-foot { display: flex; align-items: center; gap: 14px; margin-top: 14px; opacity: .85; font-size: .9rem; }
+
+/* ---------------- level map ---------------- */
+.map-player { flex: 1; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-stat { background: rgba(0,0,0,.28); border-radius: 12px; padding: 5px 10px; font-size: .9rem; flex: none; }
+.btn.continue { width: 100%; max-width: 560px; margin-bottom: 8px; }
+.map-actions { display: flex; gap: 8px; width: 100%; max-width: 560px; margin-bottom: 12px; }
+.map-actions .btn { flex: 1; font-size: 1rem; padding: 12px 8px; }
+
+.level-grid {
+  width: 100%; max-width: 560px; display: grid; gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));   /* minmax(0,…): 1fr alone won't shrink below content */
+  padding-bottom: 20px;
+}
+.lvl {
+  aspect-ratio: 1; border: 0; border-radius: 16px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: rgba(255,255,255,.12); color: #fff; font-family: inherit;
+  font-size: 1.1rem; font-weight: 700;
+}
+.lvl.open { background: var(--cc-leaf); box-shadow: 0 4px 0 #1f4b2c; }
+.lvl.done { background: rgba(93,219,122,.28); box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.lvl.locked { opacity: .45; cursor: default; }
+.lvl.boss { background: #7a3350; box-shadow: 0 4px 0 #522236; }
+.lvl.boss.done { background: rgba(233,120,160,.3); }
+.lvl-stars { font-size: .62rem; letter-spacing: 1px; color: var(--cc-sun); }
+
+/* ---------------- team picker ---------------- */
+.team-list { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+.crit-card {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) 34px; align-items: center; gap: 10px;
+  border: 0; border-radius: 16px; padding: 10px; cursor: pointer; text-align: left;
+  background: rgba(255,255,255,.1); color: #eaf7ed; font-family: inherit;
+}
+.crit-card.on { background: rgba(93,219,122,.24); outline: 2px solid var(--gk-accent); }
+.crit-card.locked { opacity: .45; cursor: default; }
+.crit-emoji { font-size: 34px; text-align: center; }
+.crit-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crit-info b { font-size: 1.05rem; }
+.crit-blurb { font-size: .82rem; opacity: .8; }
+.crit-stats { font-size: .8rem; opacity: .9; }
+.crit-power { font-size: .8rem; color: #cdb6ff; }
+.crit-pick { font-size: 1.3rem; text-align: center; color: var(--gk-accent); }
+
+/* ---------------- duel setup ---------------- */
+.duel-block { width: 100%; max-width: 560px; margin-bottom: 12px; }
+.duel-block h3 { margin: 0 0 6px; font-size: 1rem; opacity: .9; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 0; border-radius: 999px; padding: 8px 12px; cursor: pointer;
+  background: rgba(255,255,255,.12); color: #eaf7ed; font-family: inherit; font-size: .9rem;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.chip.on { background: var(--gk-accent); color: #10240f; font-weight: 700; }
+#screen-duel .btn.big { margin-top: 4px; margin-bottom: 24px; }
+
+/* ---------------- game screen ---------------- */
+/* gk-base centres a screen's children, which collapses a full-bleed stage to
+   the width of its content — and a stage whose only child is an absolutely
+   positioned canvas has content width 0. */
+#screen-game { align-items: stretch; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); overflow: hidden; touch-action: none; }
+.game-bar { max-width: none; gap: 6px; flex: none; }
+.hud { background: rgba(0,0,0,.3); border-radius: 10px; padding: 5px 9px; font-size: .82rem; white-space: nowrap; }
+#hud-level { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.hud.turn { color: var(--cc-sun); }
+.game-stage {
+  position: relative; flex: 1; width: 100%; overflow: hidden; touch-action: none;
+  border-radius: 16px; background: #10201a;
+}
+/* The canvas is a replaced element: without an explicit CSS size it renders at
+   its ATTRIBUTE size (logical x DPR) and overflows every retina screen. */
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.action-bar {
+  flex: none; display: flex; flex-direction: column; gap: 6px; padding-top: 6px;
+  width: 100%; max-width: 640px; margin: 0 auto;
+}
+.sel-card { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.sel-hint { opacity: .7; font-size: .9rem; }
+.sel-emoji { font-size: 30px; }
+.sel-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sel-info b { font-size: 1rem; }
+.sel-hp { display: block; height: 7px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
+.sel-hp i { display: block; height: 100%; background: var(--gk-accent); }
+.sel-num { font-size: .78rem; opacity: .85; }
+.act-btns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.btn.small { font-size: .82rem; padding: 11px 4px; border-radius: 14px; box-shadow: 0 4px 0 rgba(0,0,0,.3); }
+.btn.power { background: #9a6ae0; box-shadow: 0 4px 0 #6b45a5; }
+.btn.power.armed { background: #d8b3ff; color: #2b1b45; animation: armed .7s ease-in-out infinite; }
+.btn.power em { font-style: normal; background: rgba(0,0,0,.35); border-radius: 8px; padding: 1px 5px; margin-left: 4px; }
+@keyframes armed { 50% { filter: brightness(1.25); } }
+
+/* ---------------- results ---------------- */
+.res-inner { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: auto; text-align: center; max-width: 420px; }
+.res-emoji { font-size: 58px; }
+.res-title { margin: 0; font-size: 1.6rem; color: var(--cc-sun); }
+.res-stars { font-size: 2rem; letter-spacing: 6px; color: rgba(255,255,255,.22); }
+.res-stars .star.on { color: var(--cc-sun); text-shadow: 0 0 14px rgba(255,226,122,.6); }
+.res-detail { opacity: .85; font-size: .95rem; }
+.res-unlock { background: rgba(93,219,122,.2); border-radius: 16px; padding: 12px; font-size: .95rem; }
+.res-finished { background: rgba(255,226,122,.16); border-radius: 16px; padding: 12px; }
+.res-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.sheet-hint { color: #4a5b52; font-size: .9rem; margin: 0 0 12px; }
+.row-btns2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+/* A hint only mouse users can act on shouldn't take up space on an iPad. */
+@media (pointer: coarse) { .keys-hint { display: none; } }

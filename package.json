@@ -1,0 +1,9 @@
+{
+  "name": "critter-clash",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turn-based tactics for the family games shelf, built on gamekit.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
