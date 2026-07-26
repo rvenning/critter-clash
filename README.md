@@ -97,6 +97,6 @@ per-level turn counts.
 
 ## Storage
 
-`cc_*` in localStorage, Firestore collection `critterclash` in the shared
+`ccl_*` in localStorage, Firestore collection `critterclash` in the shared
 family project. The Firebase config in `js/firebase-config.js` is a client key,
 not a secret — it's restricted to the Cloud Firestore API.
