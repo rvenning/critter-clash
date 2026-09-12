@@ -4,7 +4,12 @@
 
 :root {
   --gk-accent: #5ddb7a;  --gk-accent-sh: #37a355;
-  --gk-green:  #5ddb7a;  --gk-green-sh:  #37a355;
+  /* No --gk-green here on purpose: it used to be this same #5ddb7a, which
+     left the two indistinguishable as colours while the kit printed ink on
+     one and white on the other — and white on #5ddb7a measures 1.76:1.
+     Inheriting gamekit's green (#1a8253, 4.81:1 on white) makes a green
+     button read as a different button, and read at all. The accent above
+     keeps the garden's light green and now carries ink, at 9.09:1. */
   --gk-blue:   #63b8ff;  --gk-blue-sh:   #3a83c4;
   --cc-deep:   #14261b;
   --cc-mid:    #1d3626;
